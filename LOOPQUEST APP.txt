@@ -1,0 +1,117 @@
+// Full React App with Streak Tracking, Chat, and Rewards
+
+import React, { useState, useEffect } from "react";
+import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { sendMessageToOpenAI } from "./openaiService";
+import io from "socket.io-client";
+
+const socket = io("https://your-server-url.com");
+
+function Home() {
+  const [task, setTask] = useState("Complete your first challenge!");
+  const [progress, setProgress] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [weeklyStreak, setWeeklyStreak] = useState(0);
+  const [monthlyStreak, setMonthlyStreak] = useState(0);
+  const [bonusPoints, setBonusPoints] = useState(0);
+  const [reward, setReward] = useState(null);
+  const [hoursSpent, setHoursSpent] = useState(0);
+  const [messages, setMessages] = useState([]);
+  const [messageInput, setMessageInput] = useState("");
+
+  useEffect(() => {
+    if (progress >= 100) {
+      setStreak((prev) => prev + 1);
+      setWeeklyStreak((prev) => prev + 1);
+      setMonthlyStreak((prev) => prev + 1);
+      setBonusPoints((prev) => prev + 10);
+      setProgress(0);
+      fetchReward();
+    }
+  }, [progress]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setHoursSpent((prev) => prev + 1);
+    }, 3600000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    socket.on("receive_message", (message) => {
+      setMessages((prevMessages) => [...prevMessages, message]);
+    });
+    return () => {
+      socket.off("receive_message");
+    };
+  }, []);
+
+  const completeTask = () => {
+    setProgress((prev) => prev + 20);
+  };
+
+  const fetchReward = async () => {
+    try {
+      const rewardMessage = await sendMessageToOpenAI("Provide a unique and fun reward message for achieving a habit milestone.");
+      setReward(rewardMessage);
+    } catch (error) {
+      console.error("Error fetching reward:", error);
+    }
+  };
+
+  const sendMessage = () => {
+    if (messageInput.trim() !== "") {
+      socket.emit("send_message", messageInput);
+      setMessageInput("");
+    }
+  };
+
+  return (
+    <div className="p-4 max-w-lg mx-auto">
+      <Card>
+        <CardContent>
+          <h2 className="text-xl font-bold">LoopQuest: Habit Challenge</h2>
+          <p className="mt-2">{task}</p>
+          <Progress value={progress} className="mt-2" />
+          <Button className="mt-2" onClick={completeTask}>Complete Task</Button>
+          <p className="mt-2">🔥 Daily Streak: {streak} days</p>
+          <p className="mt-2">📅 Weekly Streak: {weeklyStreak} weeks</p>
+          <p className="mt-2">📆 Monthly Streak: {monthlyStreak} months</p>
+          <p className="mt-2">🎯 Bonus Points: {bonusPoints}</p>
+          <p className="mt-2">⏳ Hours Spent: {hoursSpent}</p>
+          {reward && <p className="mt-2">🎉 Reward: {reward}</p>}
+          
+          <div className="mt-4">
+            <h3 className="font-bold">💬 Online Chat</h3>
+            <div className="border p-2 h-32 overflow-auto">
+              {messages.map((msg, index) => (
+                <p key={index} className="p-1 border-b">{msg}</p>
+              ))}
+            </div>
+            <input
+              type="text"
+              className="mt-2 p-2 w-full border"
+              value={messageInput}
+              onChange={(e) => setMessageInput(e.target.value)}
+              placeholder="Type a message..."
+            />
+            <Button className="mt-2" onClick={sendMessage}>Send</Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<Home />} />
+      </Routes>
+    </Router>
+  );
+}
